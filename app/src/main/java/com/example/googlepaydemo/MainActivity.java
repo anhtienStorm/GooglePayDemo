@@ -1,13 +1,24 @@
 package com.example.googlepaydemo;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.os.Bundle;
 import android.util.Log;
 import android.widget.Button;
 
+import com.android.billingclient.api.BillingClient;
+import com.android.billingclient.api.BillingClientStateListener;
+import com.android.billingclient.api.BillingFlowParams;
+import com.android.billingclient.api.BillingResult;
+import com.android.billingclient.api.Purchase;
+import com.android.billingclient.api.PurchasesUpdatedListener;
+import com.android.billingclient.api.SkuDetails;
+import com.android.billingclient.api.SkuDetailsParams;
+import com.android.billingclient.api.SkuDetailsResponseListener;
 import com.google.android.gms.ads.AdRequest;
 import com.google.android.gms.ads.AdView;
 import com.google.android.gms.ads.LoadAdError;
@@ -18,6 +29,9 @@ import com.google.android.gms.ads.rewarded.RewardItem;
 import com.google.android.gms.ads.rewarded.RewardedAd;
 import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class MainActivity extends AppCompatActivity {
 
     private AdView adView, adView2;
@@ -25,6 +39,9 @@ public class MainActivity extends AppCompatActivity {
     private AdRequest mAdRequest;
     private Button mLoadAds, mGooglePay;
 
+    private BillingClient mBillingClient;
+
+    @SuppressLint("MissingPermission")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -44,6 +61,57 @@ public class MainActivity extends AppCompatActivity {
             loadAdsRewarded();
         });
 
+        mBillingClient = BillingClient.newBuilder(this)
+                .enablePendingPurchases()
+                .setListener((billingResult, list) -> {
+
+                })
+                .build();
+        connectToGooglePlayBilling();
+    }
+
+    private void connectToGooglePlayBilling() {
+        mBillingClient.startConnection(
+                new BillingClientStateListener() {
+                    @Override
+                    public void onBillingServiceDisconnected() {
+
+                    }
+
+                    @Override
+                    public void onBillingSetupFinished(@NonNull BillingResult billingResult) {
+                        if (billingResult.getResponseCode() == BillingClient.BillingResponseCode.OK) {
+                            getProductDetails();
+                        }
+                    }
+                }
+        );
+    }
+
+    private void getProductDetails() {
+        List<String> productIds = new ArrayList<>();
+        productIds.add("android.test.purchased");
+        SkuDetailsParams getProductDetailsQuery = SkuDetailsParams
+                .newBuilder()
+                .setSkusList(productIds)
+                .setType(BillingClient.SkuType.INAPP)
+                .build();
+        mBillingClient.querySkuDetailsAsync(
+                getProductDetailsQuery,
+                (billingResult, list) -> {
+                    if (billingResult.getResponseCode() == BillingClient.BillingResponseCode.OK &&
+                    list != null) {
+                        SkuDetails itemInfo = list.get(0);
+                        mGooglePay.setText(itemInfo.getPrice());
+                        mGooglePay.setOnClickListener(view -> {
+                            mBillingClient.launchBillingFlow(
+                                    this,
+                                    BillingFlowParams.newBuilder().setSkuDetails(itemInfo).build()
+                            );
+                        });
+                    }
+                }
+        );
     }
 
     @Override
